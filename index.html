@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Generador QR - Equipos EDF</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; color: #1a1a2e; min-height: 100vh; }
+
+header {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 60%, #0f3460 100%);
+  color: white; padding: 20px 32px;
+  display: flex; align-items: center; gap: 16px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+}
+header .logo { font-size: 32px; }
+header h1  { font-size: 22px; font-weight: 700; }
+header p   { font-size: 13px; opacity: 0.7; margin-top: 2px; }
+
+.container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+
+.panel {
+  background: white; border-radius: 14px; padding: 22px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.07); margin-bottom: 18px;
+}
+.panel h2 { font-size: 15px; font-weight: 700; margin-bottom: 16px; color: #0f3460; }
+
+.import-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+.drop-zone {
+  border: 2px dashed #b0bec5; border-radius: 12px; padding: 32px 20px;
+  text-align: center; cursor: pointer; transition: all 0.2s; background: #fafbfc;
+}
+.drop-zone:hover, .drop-zone.over { border-color: #0f3460; background: #e8f0fe; }
+.drop-zone .ico { font-size: 38px; margin-bottom: 8px; }
+.drop-zone p { font-size: 13px; color: #546e7a; margin-bottom: 12px; }
+input[type=file] { display: none; }
+
+.paste-col { display: flex; flex-direction: column; gap: 8px; }
+.paste-col label { font-size: 12px; font-weight: 600; color: #546e7a; }
+textarea {
+  flex: 1; border: 1.5px solid #dde1e7; border-radius: 10px;
+  padding: 10px; font-size: 12px; font-family: monospace;
+  resize: none; height: 130px; outline: none; transition: border-color 0.2s;
+}
+textarea:focus { border-color: #0f3460; }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 10px 18px; border-radius: 8px; border: none;
+  font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;
+}
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-primary { background: #0f3460; color: white; }
+.btn-primary:not(:disabled):hover { background: #1a4a7a; transform: translateY(-1px); }
+.btn-success { background: #2e7d32; color: white; }
+.btn-success:not(:disabled):hover { background: #388e3c; transform: translateY(-1px); }
+.btn-outline { background: white; color: #0f3460; border: 2px solid #0f3460; }
+.btn-outline:hover { background: #e8f0fe; }
+.btn-sm { padding: 6px 13px; font-size: 12px; }
+.btn-card { background: #e65100; color: white; }
+.btn-card:not(:disabled):hover { background: #f57c00; transform: translateY(-1px); }
+
+.col-map-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px,1fr)); gap: 12px; margin-bottom: 18px; }
+.col-map-item label { display: block; font-size: 12px; font-weight: 600; color: #546e7a; margin-bottom: 5px; }
+.col-map-item select {
+  width: 100%; padding: 7px 10px; border: 1.5px solid #dde1e7;
+  border-radius: 8px; font-size: 13px; outline: none; background: white;
+}
+.col-map-item select:focus { border-color: #0f3460; }
+
+/* TOOLBAR */
+.toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+.badge { background: #e8f0fe; color: #0f3460; padding: 5px 14px; border-radius: 20px; font-size: 13px; font-weight: 700; margin-left: auto; }
+
+/* VIEW TOGGLE */
+.view-toggle { display: flex; border: 2px solid #0f3460; border-radius: 8px; overflow: hidden; }
+.view-toggle button {
+  padding: 7px 14px; border: none; font-size: 12px; font-weight: 600;
+  cursor: pointer; background: white; color: #0f3460; transition: all 0.15s;
+}
+.view-toggle button.active { background: #0f3460; color: white; }
+
+/* PROGRESS */
+.prog-wrap { background: #e0e0e0; border-radius: 20px; height: 7px; margin-bottom: 6px; overflow: hidden; display: none; }
+.prog-bar  { background: #0f3460; height: 100%; width: 0%; transition: width 0.15s; border-radius: 20px; }
+.prog-txt  { font-size: 12px; color: #546e7a; text-align: center; margin-bottom: 10px; display: none; }
+
+/* ── QR GRID ── */
+#qr-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 14px;
+}
+.qr-card {
+  background: white; border-radius: 12px; padding: 16px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.07);
+  display: flex; flex-direction: column; align-items: center; gap: 9px;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.qr-card:hover { transform: translateY(-2px); box-shadow: 0 5px 18px rgba(0,0,0,0.12); }
+.qr-card .ttl { font-size: 13px; font-weight: 700; color: #0f3460; text-align: center; }
+.qr-card .sub { font-size: 11px; color: #546e7a; text-align: center; line-height: 1.5; }
+.qr-card img  { border: 1px solid #eee; border-radius: 6px; display: block; }
+.qr-card .btn-dl { font-size: 11px; padding: 5px 12px; width: 100%; justify-content: center; }
+
+/* ── TARJETAS ── */
+#cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(620px, 1fr));
+  gap: 20px;
+}
+
+.vcard {
+  background: white;
+  border-radius: 14px;
+  box-shadow: 0 3px 14px rgba(0,0,0,0.1);
+  overflow: hidden;
+  width: 620px;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.vcard:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,0.15); }
+
+.vcard-header {
+  background: linear-gradient(135deg, #1a1a2e 0%, #0f3460 100%);
+  color: white;
+  padding: 12px 18px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.vcard-header .badge-edf {
+  background: rgba(255,255,255,0.15);
+  border: 1px solid rgba(255,255,255,0.3);
+  padding: 3px 10px; border-radius: 20px;
+  font-size: 11px; font-weight: 700; letter-spacing: 1px;
+}
+.vcard-header .regional { font-size: 12px; opacity: 0.8; }
+
+.vcard-body {
+  display: flex; gap: 0;
+}
+
+.vcard-data {
+  flex: 1; padding: 16px 18px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+
+.vcard-activo {
+  font-size: 22px; font-weight: 800; color: #0f3460;
+  margin-bottom: 4px;
+}
+
+.vcard-fields { display: flex; flex-direction: column; gap: 5px; }
+.vfield {
+  display: flex; gap: 6px; align-items: baseline;
+  font-size: 12.5px;
+}
+.vfield .lbl {
+  color: #90a4ae; font-size: 11px; font-weight: 600;
+  min-width: 52px; flex-shrink: 0;
+}
+.vfield .val { color: #1a1a2e; font-weight: 500; word-break: break-all; }
+
+.vcard-qr {
+  width: 180px; flex-shrink: 0;
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 6px;
+  background: #f8f9ff;
+  border-left: 1px solid #eee;
+  padding: 16px 12px;
+}
+.vcard-qr img { border-radius: 6px; display: block; }
+.vcard-qr .scan-lbl { font-size: 10px; color: #90a4ae; font-weight: 600; letter-spacing: 0.5px; }
+
+.vcard-footer {
+  background: #f0f2f5;
+  padding: 8px 18px;
+  display: flex; justify-content: space-between; align-items: center;
+  border-top: 1px solid #eee;
+}
+.vcard-footer span { font-size: 11px; color: #78909c; }
+.vcard-footer .btn-dl-card { font-size: 11px; padding: 5px 12px; }
+
+/* EMPTY */
+.empty {
+  grid-column: 1/-1; text-align: center; padding: 60px 20px; color: #b0bec5;
+}
+.empty .ico { font-size: 52px; margin-bottom: 12px; }
+.empty p { font-size: 14px; }
+
+/* ALERTS */
+.alert { padding: 10px 16px; border-radius: 8px; font-size: 13px; margin-bottom: 12px; display: none; }
+.alert-err { background: #ffebee; color: #c62828; border-left: 4px solid #e53935; }
+.alert-ok  { background: #e8f5e9; color: #2e7d32; border-left: 4px solid #43a047; }
+
+table { width:100%; border-collapse:collapse; font-size:12px; }
+th { background:#f0f2f5; padding:7px 12px; text-align:left; font-weight:700; color:#546e7a; border-bottom:2px solid #dde1e7; }
+td { padding:6px 12px; border-bottom:1px solid #f0f2f5; }
+tr:hover td { background:#f8f9ff; }
+
+@media print {
+  header,.panel,.toolbar,.prog-wrap,.prog-txt { display:none!important; }
+  #qr-grid  { grid-template-columns: repeat(4,1fr); gap:8px; }
+  #cards-grid { grid-template-columns: 1fr; gap:12px; }
+  .qr-card  { box-shadow:none; border:1px solid #ddd; break-inside:avoid; }
+  .vcard    { box-shadow:none; border:1px solid #ccc; break-inside:avoid; width:100%; }
+  .btn-dl, .btn-dl-card { display:none!important; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">📱</div>
+  <div>
+    <h1>Generador QR — Equipos EDF</h1>
+    <p>Importá CSV o pegá desde Google Sheets · Vista QR y Tarjetas Virtuales</p>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- IMPORTAR -->
+  <div class="panel" id="panel-import">
+    <h2>📂 Importar datos</h2>
+    <div class="alert alert-err" id="alert-err"></div>
+    <div class="alert alert-ok"  id="alert-ok"></div>
+
+    <div class="import-grid">
+      <div>
+        <div class="drop-zone" id="drop-zone" onclick="document.getElementById('fi').click()">
+          <div class="ico">📄</div>
+          <p>Arrastrá un archivo <strong>CSV</strong> aquí<br>o hacé click para seleccionar</p>
+          <input type="file" id="fi" accept=".csv,.txt">
+          <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();document.getElementById('fi').click()">Seleccionar archivo</button>
+        </div>
+      </div>
+      <div class="paste-col">
+        <label>📋 Pegar desde Google Sheets (copiá con encabezados y pegá acá)</label>
+        <textarea id="paste-area" placeholder="Regional&#9;Código Cliente&#9;Activo&#9;Marca del EDF&#9;RG del Equipo&#9;Modelo&#9;Año&#9;Ploteo&#10;Almacen Orange&#9;N-OR-00001&#9;EDF_1&#9;METALFRIO&#9;..."></textarea>
+        <button class="btn btn-primary" onclick="parsePaste()">⚡ Procesar datos pegados</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAPEO -->
+  <div class="panel" id="panel-map" style="display:none">
+    <h2>🗂️ Mapeo de columnas</h2>
+    <p style="font-size:13px;color:#546e7a;margin-bottom:14px">Indicá qué columna corresponde a cada campo.</p>
+    <div class="col-map-grid" id="col-map-grid"></div>
+
+    <!-- URL BASE -->
+    <div style="background:#f8f9ff;border:1.5px solid #e8eaf6;border-radius:10px;padding:14px;margin-bottom:18px">
+      <p style="font-size:12px;font-weight:700;color:#0f3460;margin-bottom:8px">
+        🌐 URL de la tarjeta virtual (QR redirigirá a esta URL)
+      </p>
+      <div style="display:flex;gap:10px;align-items:center">
+        <input id="base-url" type="text" style="flex:1;padding:8px 12px;border:1.5px solid #dde1e7;border-radius:8px;font-size:13px;outline:none"
+          placeholder="Ej: https://tudominio.com  o  http://localhost:3000">
+        <button class="btn btn-outline btn-sm" onclick="autoDetectarURL()">Auto-detectar</button>
+      </div>
+      <p style="font-size:11px;color:#90a4ae;margin-top:6px">
+        Al escanear el QR se abrirá: <span id="url-preview" style="color:#0f3460;font-weight:600">{URL}/qr-view.html?activo=EDF_1&amp;rg=...</span>
+      </p>
+      <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;cursor:pointer">
+        <input type="checkbox" id="chk-url" checked> Codificar URL (tarjeta virtual al escanear)
+        <span style="font-size:11px;color:#90a4ae">/ Desmarcar para codificar solo texto</span>
+      </label>
+    </div>
+
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-success" id="btn-gen" onclick="generarTodo()">✅ Generar QR codes</button>
+      <button class="btn btn-outline" onclick="resetTodo()">🔄 Reiniciar</button>
+    </div>
+  </div>
+
+  <!-- PREVIEW -->
+  <div class="panel" id="panel-preview" style="display:none">
+    <h2>👁 Vista previa — <span id="row-count">0</span> filas</h2>
+    <div style="overflow-x:auto">
+      <table><thead id="th"></thead><tbody id="tb"></tbody></table>
+    </div>
+  </div>
+
+  <!-- TOOLBAR -->
+  <div class="toolbar" id="toolbar" style="display:none">
+    <div class="view-toggle">
+      <button id="btn-view-qr"    class="active" onclick="setVista('qr')">🔲 Vista QR</button>
+      <button id="btn-view-cards" onclick="setVista('cards')">🪪 Tarjetas</button>
+    </div>
+    <button class="btn btn-success" id="btn-zip"   onclick="descargarZip()">⬇️ Descargar QR (ZIP)</button>
+    <button class="btn btn-card"    id="btn-cards" onclick="descargarTarjetas()" style="display:none">⬇️ Descargar Tarjetas (ZIP)</button>
+    <button class="btn btn-outline" onclick="window.print()">🖨️ Imprimir</button>
+    <div class="badge" id="badge">0 items</div>
+  </div>
+
+  <div class="prog-wrap" id="prog-wrap"><div class="prog-bar" id="prog-bar"></div></div>
+  <div class="prog-txt"  id="prog-txt"></div>
+
+  <!-- VISTA QR -->
+  <div id="qr-grid">
+    <div class="empty">
+      <div class="ico">🔲</div>
+      <p>Importá un CSV o pegá datos de Google Sheets para generar los QR codes</p>
+    </div>
+  </div>
+
+  <!-- VISTA TARJETAS -->
+  <div id="cards-grid" style="display:none"></div>
+
+</div>
+
+<script>
+// ── CONFIGURACIÓN ─────────────────────────────────────────────────────────────
+const CAMPOS = [
+  { key:'activo',   label:'Activo',            req:true  },
+  { key:'marca',    label:'Marca del EDF',      req:true  },
+  { key:'rg',       label:'RG del Equipo',      req:true  },
+  { key:'modelo',   label:'Modelo del equipo',  req:false },
+  { key:'anio',     label:'Año de Fabricación', req:false },
+  { key:'ploteo',   label:'Ploteo del EDF',     req:false },
+  { key:'regional', label:'Regional',           req:false },
+  { key:'cliente',  label:'Código Cliente',     req:false },
+];
+const HINTS = {
+  activo:   ['activo','active','edf','nombre'],
+  marca:    ['marca','brand','fabricante'],
+  rg:       ['rg','serie','serial','numero'],
+  modelo:   ['modelo','model','tipo'],
+  anio:     ['anio','año','year','fabricacion'],
+  ploteo:   ['ploteo','plot','ruta','zona'],
+  regional: ['regional','region','sucursal'],
+  cliente:  ['cliente','codigo','client'],
+};
+
+let datos   = [];
+let headers = [];
+let vistaActual = 'qr';
+let generados   = [];  // [{idx, activo, marca, modelo, regional, cliente, camposExtra, qrUrl, texto}]
+
+// ── QR GENERATOR ─────────────────────────────────────────────────────────────
+function makeQRUrl(text, cellSz) {
+  try {
+    var q = qrcode(0, 'L'); q.addData(text,'Byte'); q.make();
+    return q.createDataURL(cellSz || 4, 0);
+  } catch(e) {
+    try {
+      var q2 = qrcode(40,'L'); q2.addData(text,'Byte'); q2.make();
+      return q2.createDataURL(cellSz || 4, 0);
+    } catch(e2) { return null; }
+  }
+}
+
+// ── DRAG & DROP ───────────────────────────────────────────────────────────────
+const dz = document.getElementById('drop-zone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('over'));
+dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('over'); if(e.dataTransfer.files[0]) leerArchivo(e.dataTransfer.files[0]); });
+document.getElementById('fi').addEventListener('change', e => { if(e.target.files[0]) leerArchivo(e.target.files[0]); });
+
+function leerArchivo(f) {
+  const r = new FileReader();
+  r.onload = ev => parseCSV(ev.target.result);
+  r.readAsText(f,'UTF-8');
+}
+function parseCSV(txt) {
+  const res = Papa.parse(txt.trim(), { header:true, skipEmptyLines:true });
+  if (!res.data.length) { alertMsg('err','No se encontraron datos.'); return; }
+  cargarDatos(res.data, res.meta.fields);
+}
+function parsePaste() {
+  const txt = document.getElementById('paste-area').value.trim();
+  if (!txt) { alertMsg('err','El área está vacía.'); return; }
+  let res = Papa.parse(txt, { header:true, delimiter:'\t', skipEmptyLines:true });
+  if (!res.data.length) res = Papa.parse(txt, { header:true, skipEmptyLines:true });
+  if (!res.data.length) { alertMsg('err','No se detectaron datos con encabezados.'); return; }
+  cargarDatos(res.data, res.meta.fields);
+}
+
+// ── CARGAR DATOS ──────────────────────────────────────────────────────────────
+function cargarDatos(d, h) {
+  datos = d; headers = h;
+  alertMsg('ok', `✅ ${d.length} filas cargadas.`);
+  mostrarPreview(d, h);
+  construirMapeo(h);
+  autoDetectar(h);
+}
+
+function mostrarPreview(d, h) {
+  document.getElementById('panel-preview').style.display = 'block';
+  document.getElementById('row-count').textContent = d.length;
+  document.getElementById('th').innerHTML = '<tr>' + h.map(c=>`<th>${c}</th>`).join('') + '</tr>';
+  document.getElementById('tb').innerHTML = d.slice(0,5).map(r =>
+    '<tr>' + h.map(c=>`<td>${r[c]||''}</td>`).join('') + '</tr>'
+  ).join('') + (d.length>5 ? `<tr><td colspan="${h.length}" style="color:#90a4ae;text-align:center;font-style:italic">... y ${d.length-5} filas más</td></tr>` : '');
+}
+
+function construirMapeo(h) {
+  document.getElementById('col-map-grid').innerHTML = CAMPOS.map(f => `
+    <div class="col-map-item">
+      <label>${f.label}${f.req?' <span style="color:#e53935">*</span>':''}</label>
+      <select id="map-${f.key}">
+        <option value="">— No incluir —</option>
+        ${h.map(c=>`<option value="${c}">${c}</option>`).join('')}
+      </select>
+    </div>`).join('');
+  document.getElementById('panel-map').style.display = 'block';
+}
+
+function autoDetectar(h) {
+  const norm = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');
+  h.forEach(col => {
+    const cn = norm(col);
+    CAMPOS.forEach(f => {
+      const sel = document.getElementById(`map-${f.key}`);
+      if (!sel || sel.value) return;
+      if (HINTS[f.key].some(hint => cn.includes(hint) || hint.includes(cn))) sel.value = col;
+    });
+  });
+}
+
+function getMap() {
+  const m = {};
+  CAMPOS.forEach(f => { const s = document.getElementById(`map-${f.key}`); m[f.key] = s ? s.value : ''; });
+  return m;
+}
+
+function buildTexto(row, map) {
+  return CAMPOS
+    .filter(f => map[f.key] && String(row[map[f.key]]||'').trim())
+    .map(f => `${f.label}: ${row[map[f.key]]}`)
+    .join('\n');
+}
+
+function buildURL(row, map) {
+  const base = (document.getElementById('base-url').value.trim() || window.location.origin)
+    .replace(/\/$/, '');
+  const params = new URLSearchParams();
+  CAMPOS.forEach(f => {
+    const col = map[f.key];
+    const val = col ? String(row[col] || '').trim() : '';
+    if (val) params.set(f.key, val);
+  });
+  return `${base}/qr-view.html?${params.toString()}`;
+}
+
+function autoDetectarURL() {
+  const base = window.location.origin + window.location.pathname.replace('qr-edf.html','');
+  document.getElementById('base-url').value = base.replace(/\/$/, '');
+  actualizarPreviewURL();
+}
+
+function actualizarPreviewURL() {
+  const base = (document.getElementById('base-url').value.trim() || window.location.origin).replace(/\/$/,'');
+  document.getElementById('url-preview').textContent = `${base}/qr-view.html?activo=EDF_1&rg=...`;
+}
+document.addEventListener('DOMContentLoaded', autoDetectarURL);
+
+// ── GENERAR TODO ──────────────────────────────────────────────────────────────
+async function generarTodo() {
+  const map = getMap();
+  if (!map.activo) { alertMsg('err','Debés mapear el campo "Activo".'); return; }
+
+  generados = [];
+  document.getElementById('qr-grid').innerHTML    = '';
+  document.getElementById('cards-grid').innerHTML  = '';
+  document.getElementById('toolbar').style.display = 'flex';
+  document.getElementById('panel-map').style.display     = 'none';
+  document.getElementById('panel-preview').style.display = 'none';
+  document.getElementById('prog-wrap').style.display = 'block';
+  document.getElementById('prog-txt').style.display  = 'block';
+  document.getElementById('btn-gen').disabled = true;
+
+  const BATCH = 50;
+  const total = datos.length;
+  let ok = 0;
+
+  for (let i = 0; i < total; i += BATCH) {
+    const chunk = datos.slice(i, i + BATCH);
+
+    chunk.forEach((row, ci) => {
+      const idx      = i + ci;
+      const texto    = buildTexto(row, map);
+      const activo   = map.activo   ? (row[map.activo]   || `Item ${idx+1}`) : `Item ${idx+1}`;
+      const marca    = map.marca    ? (row[map.marca]    || '') : '';
+      const rg       = map.rg       ? (row[map.rg]       || '') : '';
+      const modelo   = map.modelo   ? (row[map.modelo]   || '') : '';
+      const anio     = map.anio     ? (row[map.anio]     || '') : '';
+      const ploteo   = map.ploteo   ? (row[map.ploteo]   || '') : '';
+      const regional = map.regional ? (row[map.regional] || '') : '';
+      const cliente  = map.cliente  ? (row[map.cliente]  || '') : '';
+
+      const usarURL = document.getElementById('chk-url').checked;
+      const contenidoQR = usarURL ? buildURL(row, map) : texto;
+      const qrUrl = makeQRUrl(contenidoQR, 4);
+      if (qrUrl) ok++;
+
+      generados[idx] = { idx, activo, marca, rg, modelo, anio, ploteo, regional, cliente, qrUrl, texto };
+
+      // ── Tarjeta QR ──
+      const card = document.createElement('div');
+      card.className = 'qr-card';
+      card.dataset.idx = idx;
+      card.innerHTML = `<div class="ttl">${activo}</div>`;
+      if (marca || modelo) card.innerHTML += `<div class="sub">${[marca,modelo].filter(Boolean).join(' · ')}</div>`;
+      if (qrUrl) {
+        const img = document.createElement('img');
+        img.src = qrUrl; img.width = 140; img.height = 140;
+        card.appendChild(img);
+        const dl = document.createElement('button');
+        dl.className = 'btn btn-primary btn-dl btn-sm';
+        dl.textContent = '⬇ QR PNG';
+        dl.onclick = () => descargarQR(idx);
+        card.appendChild(dl);
+        const dlc = document.createElement('button');
+        dlc.className = 'btn btn-card btn-dl btn-sm';
+        dlc.textContent = '🪪 Tarjeta';
+        dlc.onclick = () => descargarTarjetaUna(idx);
+        card.appendChild(dlc);
+      } else {
+        card.innerHTML += `<div style="font-size:11px;color:#c62828;text-align:center">Texto demasiado largo</div>`;
+      }
+      document.getElementById('qr-grid').appendChild(card);
+
+      // ── Tarjeta virtual HTML ──
+      document.getElementById('cards-grid').appendChild(crearVCard(generados[idx]));
+    });
+
+    const pct = Math.round(((i + chunk.length) / total) * 100);
+    document.getElementById('prog-bar').style.width = pct + '%';
+    document.getElementById('prog-txt').textContent  = `Generando ${Math.min(i+BATCH,total)} de ${total}...`;
+    document.getElementById('badge').textContent      = `${Math.min(i+BATCH,total)} / ${total}`;
+    await new Promise(r => setTimeout(r, 0));
+  }
+
+  document.getElementById('prog-wrap').style.display = 'none';
+  document.getElementById('prog-txt').style.display  = 'none';
+  document.getElementById('badge').textContent        = `${ok} QR codes`;
+  document.getElementById('btn-gen').disabled         = false;
+  alertMsg('ok', `🎉 ${ok} QR codes y tarjetas generados.`);
+  setVista(vistaActual);
+}
+
+// ── TARJETA VIRTUAL HTML ──────────────────────────────────────────────────────
+function crearVCard(d) {
+  const wrap = document.createElement('div');
+  wrap.className = 'vcard';
+  wrap.dataset.idx = d.idx;
+
+  const fields = [
+    { lbl:'Marca',  val: d.marca    },
+    { lbl:'RG',     val: d.rg       },
+    { lbl:'Modelo', val: d.modelo   },
+    { lbl:'Año',    val: d.anio     },
+    { lbl:'Ploteo', val: d.ploteo   },
+  ].filter(f => f.val);
+
+  wrap.innerHTML = `
+    <div class="vcard-header">
+      <span class="badge-edf">EQUIPO EDF</span>
+      <span class="regional">${d.regional || ''}</span>
+    </div>
+    <div class="vcard-body">
+      <div class="vcard-data">
+        <div class="vcard-activo">${d.activo}</div>
+        <div class="vcard-fields">
+          ${fields.map(f=>`
+            <div class="vfield">
+              <span class="lbl">${f.lbl}</span>
+              <span class="val">${f.val}</span>
+            </div>`).join('')}
+        </div>
+      </div>
+      <div class="vcard-qr">
+        ${d.qrUrl ? `<img src="${d.qrUrl}" width="140" height="140">` : '<div style="width:140px;height:140px;background:#f5f5f5;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;color:#90a4ae">Sin QR</div>'}
+        <span class="scan-lbl">📷 ESCANEAR</span>
+      </div>
+    </div>
+    <div class="vcard-footer">
+      <span>${d.cliente ? 'Cód. Cliente: ' + d.cliente : ''}</span>
+      <button class="btn btn-card btn-sm btn-dl-card" onclick="descargarTarjetaUna(${d.idx})">⬇ Descargar tarjeta</button>
+    </div>`;
+
+  return wrap;
+}
+
+// ── VISTA TOGGLE ──────────────────────────────────────────────────────────────
+function setVista(v) {
+  vistaActual = v;
+  const qrG   = document.getElementById('qr-grid');
+  const carG  = document.getElementById('cards-grid');
+  const btnQR = document.getElementById('btn-view-qr');
+  const btnCd = document.getElementById('btn-view-cards');
+  const btnZip   = document.getElementById('btn-zip');
+  const btnCards = document.getElementById('btn-cards');
+
+  if (v === 'qr') {
+    qrG.style.display   = 'grid';
+    carG.style.display  = 'none';
+    btnQR.classList.add('active');
+    btnCd.classList.remove('active');
+    btnZip.style.display   = 'inline-flex';
+    btnCards.style.display = 'none';
+  } else {
+    qrG.style.display   = 'none';
+    carG.style.display  = 'grid';
+    btnQR.classList.remove('active');
+    btnCd.classList.add('active');
+    btnZip.style.display   = 'none';
+    btnCards.style.display = 'inline-flex';
+  }
+}
+
+// ── CANVAS: TARJETA PNG ───────────────────────────────────────────────────────
+// Dibuja la tarjeta en un canvas 700×340 y devuelve data URL PNG
+async function renderTarjetaPNG(d) {
+  const W = 700, H = 340;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+
+  // Fondo blanco con sombra simulada (borde gris)
+  ctx.fillStyle = '#f0f2f5';
+  ctx.fillRect(0, 0, W, H);
+
+  // Tarjeta blanca con bordes redondeados
+  roundRect(ctx, 8, 8, W-16, H-16, 12);
+  ctx.fillStyle = 'white';
+  ctx.fill();
+
+  // Header degradado
+  roundRect(ctx, 8, 8, W-16, 52, { tl:12, tr:12, bl:0, br:0 });
+  const grad = ctx.createLinearGradient(0, 0, W, 60);
+  grad.addColorStop(0, '#1a1a2e');
+  grad.addColorStop(1, '#0f3460');
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Badge EQUIPO EDF
+  ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+  ctx.lineWidth = 1;
+  roundRect(ctx, 20, 18, 110, 22, 11);
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,0.12)';
+  ctx.fill();
+  ctx.fillStyle = 'white';
+  ctx.font = 'bold 11px Segoe UI';
+  ctx.fillText('EQUIPO EDF', 28, 33);
+
+  // Regional (header derecha)
+  if (d.regional) {
+    ctx.fillStyle = 'rgba(255,255,255,0.75)';
+    ctx.font = '11px Segoe UI';
+    ctx.textAlign = 'right';
+    ctx.fillText(d.regional, W-20, 33);
+    ctx.textAlign = 'left';
+  }
+
+  // Nombre Activo (grande)
+  ctx.fillStyle = '#0f3460';
+  ctx.font = 'bold 28px Segoe UI';
+  ctx.fillText(d.activo, 22, 98);
+
+  // Línea separadora
+  ctx.strokeStyle = '#e0e0e0';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(22, 108); ctx.lineTo(480, 108); ctx.stroke();
+
+  // Campos
+  const campos = [
+    ['Marca del EDF', d.marca  ],
+    ['RG del Equipo', d.rg     ],
+    ['Modelo',        d.modelo ],
+    ['Año de Fab.',   d.anio   ],
+    ['Ploteo',        d.ploteo ],
+  ].filter(([,v]) => v);
+
+  let y = 128;
+  campos.forEach(([label, val]) => {
+    ctx.fillStyle = '#90a4ae';
+    ctx.font = '11px Segoe UI';
+    ctx.fillText(label, 22, y);
+    ctx.fillStyle = '#1a1a2e';
+    ctx.font = '600 13px Segoe UI';
+    ctx.fillText(String(val), 22, y+16);
+    y += 38;
+  });
+
+  // Línea vertical separadora QR
+  ctx.strokeStyle = '#eeeeee';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(500, 68); ctx.lineTo(500, H-40); ctx.stroke();
+
+  // QR image
+  if (d.qrUrl) {
+    await new Promise(resolve => {
+      const img = new Image();
+      img.onload = () => {
+        ctx.drawImage(img, 510, 72, 160, 160);
+        resolve();
+      };
+      img.onerror = resolve;
+      img.src = d.qrUrl;
+    });
+  }
+
+  // Label "ESCANEAR"
+  ctx.fillStyle = '#90a4ae';
+  ctx.font = '600 10px Segoe UI';
+  ctx.textAlign = 'center';
+  ctx.fillText('📷  ESCANEAR', 590, 248);
+  ctx.textAlign = 'left';
+
+  // Footer
+  roundRect(ctx, 8, H-48, W-16, 40, { tl:0, tr:0, bl:12, br:12 });
+  ctx.fillStyle = '#f0f2f5';
+  ctx.fill();
+  ctx.strokeStyle = '#e0e0e0';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(8, H-48); ctx.lineTo(W-8, H-48); ctx.stroke();
+
+  if (d.cliente) {
+    ctx.fillStyle = '#78909c';
+    ctx.font = '11px Segoe UI';
+    ctx.fillText('Código Cliente: ' + d.cliente, 22, H-22);
+  }
+
+  return c.toDataURL('image/png');
+}
+
+// Helper bordes redondeados
+function roundRect(ctx, x, y, w, h, r) {
+  let tl=r, tr=r, bl=r, br=r;
+  if (typeof r === 'object') { tl=r.tl||0; tr=r.tr||0; bl=r.bl||0; br=r.br||0; }
+  ctx.beginPath();
+  ctx.moveTo(x+tl, y);
+  ctx.lineTo(x+w-tr, y); ctx.arcTo(x+w, y, x+w, y+tr, tr);
+  ctx.lineTo(x+w, y+h-br); ctx.arcTo(x+w, y+h, x+w-br, y+h, br);
+  ctx.lineTo(x+bl, y+h); ctx.arcTo(x, y+h, x, y+h-bl, bl);
+  ctx.lineTo(x, y+tl); ctx.arcTo(x, y, x+tl, y, tl);
+  ctx.closePath();
+}
+
+// ── DESCARGAR QR PNG ─────────────────────────────────────────────────────────
+function descargarQR(idx) {
+  const d = generados[idx];
+  if (!d || !d.qrUrl) return;
+  const img = new Image();
+  img.onload = () => {
+    const sz = 200;
+    const c = document.createElement('canvas');
+    c.width = sz; c.height = sz;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,sz,sz);
+    ctx.drawImage(img, 0, 0, sz, sz);
+    const a = document.createElement('a');
+    a.download = `QR_${safe(d.activo)}.png`;
+    a.href = c.toDataURL('image/png');
+    a.click();
+  };
+  img.src = d.qrUrl;
+}
+
+// ── DESCARGAR TARJETA ÚNICA ───────────────────────────────────────────────────
+async function descargarTarjetaUna(idx) {
+  const d = generados[idx];
+  if (!d) return;
+  const url = await renderTarjetaPNG(d);
+  const a = document.createElement('a');
+  a.download = `Tarjeta_${safe(d.activo)}.png`;
+  a.href = url;
+  a.click();
+}
+
+// ── DESCARGAR TODAS LAS TARJETAS (ZIP) ───────────────────────────────────────
+async function descargarTarjetas() {
+  if (!generados.length) { alertMsg('err','No hay tarjetas generadas.'); return; }
+  const btn = document.getElementById('btn-cards');
+  btn.disabled = true;
+
+  const zip = new JSZip();
+  const folder = zip.folder('Tarjetas_EDF');
+  const BATCH = 20; // canvas rendering es pesado, lotes pequeños
+
+  for (let i = 0; i < generados.length; i += BATCH) {
+    const chunk = generados.slice(i, i+BATCH);
+    await Promise.all(chunk.map(async (d) => {
+      if (!d) return;
+      const url = await renderTarjetaPNG(d);
+      if (!url) return;
+      const b64 = url.replace(/^data:image\/png;base64,/, '');
+      folder.file(`Tarjeta_${String(d.idx+1).padStart(4,'0')}_${safe(d.activo)}.png`, b64, { base64:true });
+    }));
+    btn.textContent = `⏳ ${Math.min(i+BATCH, generados.length)}/${generados.length}...`;
+    await new Promise(r => setTimeout(r, 0));
+  }
+
+  btn.textContent = '⏳ Comprimiendo...';
+  const blob = await zip.generateAsync({ type:'blob', compression:'DEFLATE', compressionOptions:{level:1} });
+  saveAs(blob, 'Tarjetas_EDF.zip');
+  btn.disabled  = false;
+  btn.textContent = '⬇️ Descargar Tarjetas (ZIP)';
+}
+
+// ── DESCARGAR QR ZIP ──────────────────────────────────────────────────────────
+async function descargarZip() {
+  if (!generados.length) { alertMsg('err','No hay QR generados.'); return; }
+  const btn = document.getElementById('btn-zip');
+  btn.disabled = true;
+
+  const zip = new JSZip();
+  const folder = zip.folder('QR_EDF');
+  const BATCH = 50;
+
+  for (let i = 0; i < generados.length; i += BATCH) {
+    const chunk = generados.slice(i, i+BATCH);
+    await Promise.all(chunk.map(async (d) => {
+      if (!d || !d.qrUrl) return;
+      const pngUrl = await gifAPng(d.qrUrl, 200);
+      if (!pngUrl) return;
+      const b64 = pngUrl.replace(/^data:image\/png;base64,/, '');
+      folder.file(`QR_${String(d.idx+1).padStart(4,'0')}_${safe(d.activo)}.png`, b64, { base64:true });
+    }));
+    btn.textContent = `⏳ ${Math.min(i+BATCH, generados.length)}/${generados.length}...`;
+    await new Promise(r => setTimeout(r, 0));
+  }
+
+  btn.textContent = '⏳ Comprimiendo...';
+  const blob = await zip.generateAsync({ type:'blob', compression:'DEFLATE', compressionOptions:{level:1} });
+  saveAs(blob, 'QR_EDF.zip');
+  btn.disabled = false;
+  btn.innerHTML = '⬇️ Descargar QR (ZIP)';
+}
+
+function gifAPng(gifUrl, sz) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = sz; c.height = sz;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,sz,sz);
+      ctx.drawImage(img, 0, 0, sz, sz);
+      resolve(c.toDataURL('image/png'));
+    };
+    img.onerror = () => resolve(null);
+    img.src = gifUrl;
+  });
+}
+
+// ── HELPERS ───────────────────────────────────────────────────────────────────
+function safe(s) { return String(s).replace(/[^a-zA-Z0-9_\-áéíóúÁÉÍÓÚñÑ]/g,'_').substring(0,50); }
+
+function alertMsg(type, msg) {
+  document.getElementById('alert-err').style.display = 'none';
+  document.getElementById('alert-ok').style.display  = 'none';
+  const el = document.getElementById('alert-' + type);
+  el.textContent = msg; el.style.display = 'block';
+  if (type === 'ok') setTimeout(() => el.style.display='none', 5000);
+}
+
+function resetTodo() {
+  datos=[]; headers=[]; generados=[];
+  ['qr-grid','cards-grid'].forEach(id => {
+    document.getElementById(id).innerHTML = id==='qr-grid'
+      ? '<div class="empty"><div class="ico">🔲</div><p>Importá un CSV o pegá datos de Google Sheets para generar los QR codes</p></div>'
+      : '';
+  });
+  ['panel-map','panel-preview','toolbar'].forEach(id => document.getElementById(id).style.display='none');
+  document.getElementById('paste-area').value = '';
+  document.getElementById('fi').value = '';
+  document.getElementById('alert-err').style.display = 'none';
+  document.getElementById('alert-ok').style.display  = 'none';
+  setVista('qr');
+}
+</script>
+</body>
+</html>

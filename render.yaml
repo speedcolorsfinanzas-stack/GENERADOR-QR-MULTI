@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: qr-edf-generator
+    env: static
+    staticPublishPath: .
+    pullRequestPreviewsEnabled: false
