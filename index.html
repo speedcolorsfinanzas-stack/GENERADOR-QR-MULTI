@@ -448,14 +448,19 @@ function buildURL(row, map) {
   return `${base}/qr-view.html?${params.toString()}`;
 }
 
+// URL fija de GitHub Pages — esta nunca cambia aunque muevas el hosting
+const GITHUB_PAGES_URL = 'https://speedcolorsfinanzas-stack.github.io/GENERADOR-QR-MULTI';
+
 function autoDetectarURL() {
-  const base = window.location.origin + window.location.pathname.replace('qr-edf.html','');
-  document.getElementById('base-url').value = base.replace(/\/$/, '');
+  const esLocal = ['localhost','127.0.0.1'].includes(window.location.hostname);
+  // En local usa el servidor actual; en producción siempre usa GitHub Pages
+  const base = esLocal ? window.location.origin : GITHUB_PAGES_URL;
+  document.getElementById('base-url').value = base;
   actualizarPreviewURL();
 }
 
 function actualizarPreviewURL() {
-  const base = (document.getElementById('base-url').value.trim() || window.location.origin).replace(/\/$/,'');
+  const base = (document.getElementById('base-url').value.trim() || GITHUB_PAGES_URL).replace(/\/$/,'');
   document.getElementById('url-preview').textContent = `${base}/qr-view.html?activo=EDF_1&rg=...`;
 }
 document.addEventListener('DOMContentLoaded', autoDetectarURL);
