@@ -623,23 +623,44 @@ function setVista(v) {
 // ── CANVAS: TARJETA PNG ───────────────────────────────────────────────────────
 // Dibuja la tarjeta en un canvas 700×340 y devuelve data URL PNG
 async function renderTarjetaPNG(d) {
-  const W = 700, H = 340;
+  const W = 700;
+  const HEADER_H  = 60;   // altura del header azul
+  const TITLE_H   = 55;   // zona del nombre activo + línea
+  const FIELD_H   = 40;   // altura por cada campo
+  const FOOTER_H  = 48;   // altura del footer
+  const PADDING   = 16;   // padding inferior antes del footer
+  const QR_SIZE   = 170;  // tamaño del QR
+
+  // Calcular campos visibles primero para determinar la altura
+  const campos = [
+    ['Marca del EDF', d.marca  ],
+    ['RG del Equipo', d.rg     ],
+    ['Modelo',        d.modelo ],
+    ['Año de Fab.',   d.anio   ],
+    ['Ploteo',        d.ploteo ],
+  ].filter(([,v]) => v);
+
+  // Altura dinámica: suficiente para todos los campos + QR (lo que sea mayor)
+  const contenidoFields = TITLE_H + (campos.length * FIELD_H) + PADDING;
+  const contenidoQR     = TITLE_H + QR_SIZE + 30;
+  const H = HEADER_H + Math.max(contenidoFields, contenidoQR) + FOOTER_H;
+
   const c = document.createElement('canvas');
   c.width = W; c.height = H;
   const ctx = c.getContext('2d');
 
-  // Fondo blanco con sombra simulada (borde gris)
+  // Fondo
   ctx.fillStyle = '#f0f2f5';
   ctx.fillRect(0, 0, W, H);
 
-  // Tarjeta blanca con bordes redondeados
+  // Tarjeta blanca
   roundRect(ctx, 8, 8, W-16, H-16, 12);
   ctx.fillStyle = 'white';
   ctx.fill();
 
   // Header degradado
-  roundRect(ctx, 8, 8, W-16, 52, { tl:12, tr:12, bl:0, br:0 });
-  const grad = ctx.createLinearGradient(0, 0, W, 60);
+  roundRect(ctx, 8, 8, W-16, HEADER_H, { tl:12, tr:12, bl:0, br:0 });
+  const grad = ctx.createLinearGradient(0, 0, W, HEADER_H);
   grad.addColorStop(0, '#1a1a2e');
   grad.addColorStop(1, '#0f3460');
   ctx.fillStyle = grad;
@@ -656,7 +677,7 @@ async function renderTarjetaPNG(d) {
   ctx.font = 'bold 11px Segoe UI';
   ctx.fillText('EQUIPO EDF', 28, 33);
 
-  // Regional (header derecha)
+  // Regional
   if (d.regional) {
     ctx.fillStyle = 'rgba(255,255,255,0.75)';
     ctx.font = '11px Segoe UI';
@@ -665,73 +686,69 @@ async function renderTarjetaPNG(d) {
     ctx.textAlign = 'left';
   }
 
-  // Nombre Activo (grande)
+  // Nombre Activo
+  const activoY = HEADER_H + 34;
   ctx.fillStyle = '#0f3460';
   ctx.font = 'bold 28px Segoe UI';
-  ctx.fillText(d.activo, 22, 98);
+  ctx.fillText(d.activo, 22, activoY);
 
   // Línea separadora
+  const sepY = activoY + 12;
   ctx.strokeStyle = '#e0e0e0';
   ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(22, 108); ctx.lineTo(480, 108); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(22, sepY); ctx.lineTo(490, sepY); ctx.stroke();
 
   // Campos
-  const campos = [
-    ['Marca del EDF', d.marca  ],
-    ['RG del Equipo', d.rg     ],
-    ['Modelo',        d.modelo ],
-    ['Año de Fab.',   d.anio   ],
-    ['Ploteo',        d.ploteo ],
-  ].filter(([,v]) => v);
-
-  let y = 128;
+  let y = sepY + 22;
   campos.forEach(([label, val]) => {
     ctx.fillStyle = '#90a4ae';
     ctx.font = '11px Segoe UI';
     ctx.fillText(label, 22, y);
     ctx.fillStyle = '#1a1a2e';
     ctx.font = '600 13px Segoe UI';
-    ctx.fillText(String(val), 22, y+16);
-    y += 38;
+    ctx.fillText(String(val), 22, y + 17);
+    y += FIELD_H;
   });
 
   // Línea vertical separadora QR
   ctx.strokeStyle = '#eeeeee';
   ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(500, 68); ctx.lineTo(500, H-40); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(505, HEADER_H + 8); ctx.lineTo(505, H - FOOTER_H - 8); ctx.stroke();
 
-  // QR image
+  // QR centrado verticalmente en la zona derecha
+  const qrAreaTop  = HEADER_H + 10;
+  const qrAreaBot  = H - FOOTER_H - 10;
+  const qrY = qrAreaTop + Math.floor((qrAreaBot - qrAreaTop - QR_SIZE) / 2);
+  const qrX = 510;
+
   if (d.qrUrl) {
     await new Promise(resolve => {
       const img = new Image();
-      img.onload = () => {
-        ctx.drawImage(img, 510, 72, 160, 160);
-        resolve();
-      };
+      img.onload = () => { ctx.drawImage(img, qrX, qrY, QR_SIZE, QR_SIZE); resolve(); };
       img.onerror = resolve;
       img.src = d.qrUrl;
     });
   }
 
-  // Label "ESCANEAR"
+  // Label ESCANEAR
   ctx.fillStyle = '#90a4ae';
   ctx.font = '600 10px Segoe UI';
   ctx.textAlign = 'center';
-  ctx.fillText('📷  ESCANEAR', 590, 248);
+  ctx.fillText('ESCANEAR', qrX + QR_SIZE/2, qrY + QR_SIZE + 16);
   ctx.textAlign = 'left';
 
   // Footer
-  roundRect(ctx, 8, H-48, W-16, 40, { tl:0, tr:0, bl:12, br:12 });
+  roundRect(ctx, 8, H - FOOTER_H, W-16, FOOTER_H - 8, { tl:0, tr:0, bl:12, br:12 });
   ctx.fillStyle = '#f0f2f5';
   ctx.fill();
   ctx.strokeStyle = '#e0e0e0';
   ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(8, H-48); ctx.lineTo(W-8, H-48); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(8, H - FOOTER_H); ctx.lineTo(W-8, H - FOOTER_H); ctx.stroke();
 
   if (d.cliente) {
     ctx.fillStyle = '#78909c';
     ctx.font = '11px Segoe UI';
-    ctx.fillText('Código Cliente: ' + d.cliente, 22, H-22);
+    ctx.fillText('Código Cliente: ' + d.cliente, 22, H - FOOTER_H + 22);
   }
 
   return c.toDataURL('image/png');
