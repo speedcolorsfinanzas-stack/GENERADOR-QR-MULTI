@@ -172,10 +172,19 @@ const LABELS = {
   cliente:  'Código Cliente',
 };
 
+// Traduce parámetros cortos (a, m, rg...) a nombres internos
+const PARAM_MAP = {
+  a:'activo', m:'marca', rg:'rg', mod:'modelo',
+  yr:'anio', plt:'ploteo', reg:'regional', cli:'cliente',
+};
+
 function getParams() {
   const p = new URLSearchParams(window.location.search);
   const d = {};
-  Object.keys(LABELS).forEach(k => { const v = p.get(k); if(v) d[k] = v; });
+  for (const [k, v] of p.entries()) {
+    const field = PARAM_MAP[k] || k; // corto → largo; largo → queda igual
+    if (v) d[field] = v;
+  }
   return d;
 }
 

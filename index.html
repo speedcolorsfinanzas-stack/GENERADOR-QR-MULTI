@@ -344,16 +344,22 @@ let generados   = [];  // [{idx, activo, marca, modelo, regional, cliente, campo
 
 // ── QR GENERATOR ─────────────────────────────────────────────────────────────
 function makeQRUrl(text, cellSz) {
+  const cs = cellSz || 5;
+  // margin = cs*4 = quiet zone de 4 módulos (mínimo recomendado para escaneo)
+  const mg = cs * 4;
   try {
     var q = qrcode(0, 'L'); q.addData(text,'Byte'); q.make();
-    return q.createDataURL(cellSz || 4, 0);
+    return q.createDataURL(cs, mg);
   } catch(e) {
     try {
       var q2 = qrcode(40,'L'); q2.addData(text,'Byte'); q2.make();
-      return q2.createDataURL(cellSz || 4, 0);
+      return q2.createDataURL(cs, mg);
     } catch(e2) { return null; }
   }
 }
+
+// Parámetros cortos para la URL (menos caracteres = QR menos denso = más fácil de escanear)
+const URL_PARAMS = { activo:'a', marca:'m', rg:'rg', modelo:'mod', anio:'yr', ploteo:'plt', regional:'reg', cliente:'cli' };
 
 // ── DRAG & DROP ───────────────────────────────────────────────────────────────
 const dz = document.getElementById('drop-zone');
@@ -437,13 +443,13 @@ function buildTexto(row, map) {
 }
 
 function buildURL(row, map) {
-  const base = (document.getElementById('base-url').value.trim() || window.location.origin)
+  const base = (document.getElementById('base-url').value.trim() || GITHUB_PAGES_URL)
     .replace(/\/$/, '');
   const params = new URLSearchParams();
   CAMPOS.forEach(f => {
     const col = map[f.key];
     const val = col ? String(row[col] || '').trim() : '';
-    if (val) params.set(f.key, val);
+    if (val) params.set(URL_PARAMS[f.key] || f.key, val);
   });
   return `${base}/qr-view.html?${params.toString()}`;
 }
