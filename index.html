@@ -255,20 +255,44 @@ tr:hover td { background:#f8f9ff; }
 
     <!-- CLIENTE / MARCA -->
     <div style="background:#f8f9ff;border:1.5px solid #e8eaf6;border-radius:10px;padding:16px;margin-bottom:14px">
-      <p style="font-size:12px;font-weight:700;color:#0f3460;margin-bottom:12px">🏢 Cliente y Marca</p>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <p style="font-size:12px;font-weight:700;color:#0f3460">🏢 Cliente y Marca</p>
+        <button class="btn btn-outline btn-sm" onclick="toggleGestion()" id="btn-gestion">⚙ Gestionar clientes/marcas</button>
+      </div>
+
+      <!-- Panel gestión -->
+      <div id="panel-gestion" style="display:none;background:white;border:1.5px solid #dde1e7;border-radius:10px;padding:14px;margin-bottom:14px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <!-- Agregar cliente -->
+          <div>
+            <p style="font-size:11px;font-weight:700;color:#546e7a;margin-bottom:8px">➕ Nuevo cliente</p>
+            <div style="display:flex;gap:6px">
+              <input id="inp-cliente" type="text" placeholder="Ej: ACME Corp" style="flex:1;padding:7px 10px;border:1.5px solid #dde1e7;border-radius:7px;font-size:13px;outline:none">
+              <button class="btn btn-primary btn-sm" onclick="agregarCliente()">Agregar</button>
+            </div>
+            <div id="lista-clientes" style="margin-top:10px;display:flex;flex-direction:column;gap:5px"></div>
+          </div>
+          <!-- Agregar marca -->
+          <div>
+            <p style="font-size:11px;font-weight:700;color:#546e7a;margin-bottom:8px">➕ Nueva marca (para cliente seleccionado)</p>
+            <div style="display:flex;gap:6px">
+              <input id="inp-marca" type="text" placeholder="Ej: MetalFrio" style="flex:1;padding:7px 10px;border:1.5px solid #dde1e7;border-radius:7px;font-size:13px;outline:none">
+              <button class="btn btn-primary btn-sm" onclick="agregarMarca()">Agregar</button>
+            </div>
+            <div id="lista-marcas" style="margin-top:10px;display:flex;flex-direction:column;gap:5px"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Selectores -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
         <div>
           <label style="display:block;font-size:11px;font-weight:600;color:#546e7a;margin-bottom:5px">Cliente</label>
-          <select id="sel-cliente" onchange="onClienteChange()" style="width:100%;padding:8px 10px;border:1.5px solid #dde1e7;border-radius:8px;font-size:13px;outline:none">
-            <option value="etreus">ETREUS</option>
-            <option value="">— Otro (URL manual) —</option>
-          </select>
+          <select id="sel-cliente" onchange="onClienteChange()" style="width:100%;padding:8px 10px;border:1.5px solid #dde1e7;border-radius:8px;font-size:13px;outline:none"></select>
         </div>
         <div>
           <label style="display:block;font-size:11px;font-weight:600;color:#546e7a;margin-bottom:5px">Marca <span style="color:#90a4ae;font-weight:400">(opcional)</span></label>
-          <select id="sel-marca" onchange="actualizarPreviewURL()" style="width:100%;padding:8px 10px;border:1.5px solid #dde1e7;border-radius:8px;font-size:13px;outline:none">
-            <option value="">— Sin marca (usar carpeta base del cliente) —</option>
-          </select>
+          <select id="sel-marca" onchange="actualizarPreviewURL()" style="width:100%;padding:8px 10px;border:1.5px solid #dde1e7;border-radius:8px;font-size:13px;outline:none"></select>
         </div>
       </div>
       <p style="font-size:11px;color:#90a4ae;margin-bottom:10px">
@@ -280,14 +304,8 @@ tr:hover td { background:#f8f9ff; }
       </label>
     </div>
 
-    <!-- URL BASE (avanzado) -->
-    <div id="url-manual" style="display:none;background:#fff8e1;border:1.5px solid #ffe082;border-radius:10px;padding:12px;margin-bottom:14px">
-      <p style="font-size:12px;font-weight:700;color:#e65100;margin-bottom:8px">⚙️ URL base manual</p>
-      <div style="display:flex;gap:10px;align-items:center">
-        <input id="base-url" type="text" style="flex:1;padding:8px 12px;border:1.5px solid #dde1e7;border-radius:8px;font-size:13px;outline:none"
-          placeholder="https://speedcolorsfinanzas-stack.github.io/GENERADOR-QR-MULTI">
-        <button class="btn btn-outline btn-sm" onclick="autoDetectarURL()">Auto</button>
-      </div>
+    <div id="url-manual" style="display:none">
+      <input id="base-url" type="hidden" value="">
     </div>
 
     <div style="display:flex;gap:10px">
@@ -473,51 +491,143 @@ function buildURL(row, map) {
 
 const GITHUB_PAGES_URL = 'https://speedcolorsfinanzas-stack.github.io/GENERADOR-QR-MULTI';
 
-// Registro de clientes y sus marcas
-const CLIENTES = {
-  etreus: { label:'ETREUS', marcas:[] }, // marcas vacías por ahora — se agregarán cuando se definan
-};
+// ── GESTIÓN CLIENTES/MARCAS (localStorage) ────────────────────────────────────
+const LS_KEY = 'qr_clientes_v1';
+
+function cargarClientes() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch(e) {}
+  // Datos por defecto
+  return { etreus: { label:'ETREUS', marcas:[] } };
+}
+
+function guardarClientes(obj) {
+  localStorage.setItem(LS_KEY, JSON.stringify(obj));
+}
+
+function slug(s) {
+  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'');
+}
+
+function agregarCliente() {
+  const inp = document.getElementById('inp-cliente');
+  const nombre = inp.value.trim();
+  if (!nombre) return;
+  const clientes = cargarClientes();
+  const key = slug(nombre);
+  if (!clientes[key]) clientes[key] = { label: nombre.toUpperCase(), marcas: [] };
+  guardarClientes(clientes);
+  inp.value = '';
+  renderSelectores();
+  document.getElementById('sel-cliente').value = key;
+  onClienteChange();
+}
+
+function eliminarCliente(key) {
+  if (!confirm('¿Eliminar cliente?')) return;
+  const clientes = cargarClientes();
+  delete clientes[key];
+  guardarClientes(clientes);
+  renderSelectores();
+}
+
+function agregarMarca() {
+  const inp = document.getElementById('inp-marca');
+  const nombre = inp.value.trim();
+  if (!nombre) return;
+  const clienteKey = document.getElementById('sel-cliente').value;
+  if (!clienteKey) { alert('Seleccioná un cliente primero.'); return; }
+  const clientes = cargarClientes();
+  const key = slug(nombre);
+  if (!clientes[clienteKey].marcas.find(m => m.value === key)) {
+    clientes[clienteKey].marcas.push({ value: key, label: nombre.toUpperCase() });
+  }
+  guardarClientes(clientes);
+  inp.value = '';
+  onClienteChange();
+}
+
+function eliminarMarca(clienteKey, marcaKey) {
+  const clientes = cargarClientes();
+  clientes[clienteKey].marcas = clientes[clienteKey].marcas.filter(m => m.value !== marcaKey);
+  guardarClientes(clientes);
+  onClienteChange();
+}
+
+function renderSelectores() {
+  const clientes = cargarClientes();
+  const selCliente = document.getElementById('sel-cliente');
+  const prev = selCliente.value;
+  selCliente.innerHTML = Object.entries(clientes)
+    .map(([k,v]) => `<option value="${k}">${v.label}</option>`).join('');
+  if (prev && clientes[prev]) selCliente.value = prev;
+
+  // Renderizar lista en panel gestión
+  const listaC = document.getElementById('lista-clientes');
+  if (listaC) {
+    listaC.innerHTML = Object.entries(clientes).map(([k,v]) => `
+      <div style="display:flex;justify-content:space-between;align-items:center;background:#f0f2f5;padding:5px 10px;border-radius:6px;font-size:12px">
+        <span style="font-weight:600">${v.label}</span>
+        <button onclick="eliminarCliente('${k}')" style="border:none;background:none;color:#e53935;cursor:pointer;font-size:13px">✕</button>
+      </div>`).join('');
+  }
+}
 
 function onClienteChange() {
-  const cliente = document.getElementById('sel-cliente').value;
-  const selMarca = document.getElementById('sel-marca');
-  const urlManual = document.getElementById('url-manual');
+  const clientes  = cargarClientes();
+  const clienteKey = document.getElementById('sel-cliente').value;
+  const selMarca   = document.getElementById('sel-marca');
+  const marcas = clientes[clienteKey]?.marcas || [];
 
-  if (!cliente) {
-    urlManual.style.display = 'block';
-    selMarca.innerHTML = '<option value="">— N/A —</option>';
-  } else {
-    urlManual.style.display = 'none';
-    const marcas = CLIENTES[cliente]?.marcas || [];
-    selMarca.innerHTML = '<option value="">— Sin marca (carpeta base del cliente) —</option>'
-      + marcas.map(m => `<option value="${m.value}">${m.label}</option>`).join('');
+  selMarca.innerHTML = '<option value="">— Sin marca —</option>'
+    + marcas.map(m => `<option value="${m.value}">${m.label}</option>`).join('');
+
+  // Actualizar lista de marcas en panel gestión
+  const listaM = document.getElementById('lista-marcas');
+  if (listaM) {
+    listaM.innerHTML = marcas.length
+      ? marcas.map(m => `
+          <div style="display:flex;justify-content:space-between;align-items:center;background:#f0f2f5;padding:5px 10px;border-radius:6px;font-size:12px">
+            <span style="font-weight:600">${m.label}</span>
+            <button onclick="eliminarMarca('${clienteKey}','${m.value}')" style="border:none;background:none;color:#e53935;cursor:pointer;font-size:13px">✕</button>
+          </div>`).join('')
+      : '<p style="font-size:11px;color:#90a4ae">Sin marcas agregadas</p>';
   }
   actualizarPreviewURL();
+}
+
+function toggleGestion() {
+  const p = document.getElementById('panel-gestion');
+  p.style.display = p.style.display === 'none' ? 'block' : 'none';
+  if (p.style.display === 'block') {
+    renderSelectores();
+    onClienteChange();
+  }
 }
 
 function getViewerURL() {
   const cliente = document.getElementById('sel-cliente').value;
   const marca   = document.getElementById('sel-marca').value;
-  if (!cliente) {
-    const manual = (document.getElementById('base-url')?.value.trim() || GITHUB_PAGES_URL).replace(/\/$/,'');
-    return `${manual}/qr-view.html`;
-  }
+  if (!cliente) return `${GITHUB_PAGES_URL}/qr-view.html`;
   const path = marca
     ? `clientes/${cliente}/${marca}/qr-view.html`
     : `clientes/${cliente}/qr-view.html`;
   return `${GITHUB_PAGES_URL}/${path}`;
 }
 
-function autoDetectarURL() {
-  document.getElementById('base-url').value = GITHUB_PAGES_URL;
-  actualizarPreviewURL();
-}
+function autoDetectarURL() { actualizarPreviewURL(); }
 
 function actualizarPreviewURL() {
   const url = getViewerURL();
   document.getElementById('url-preview').textContent = `${url}?a=EDF_1&rg=...`;
 }
-document.addEventListener('DOMContentLoaded', () => { onClienteChange(); });
+
+document.addEventListener('DOMContentLoaded', () => {
+  renderSelectores();
+  onClienteChange();
+});
 document.addEventListener('DOMContentLoaded', autoDetectarURL);
 
 // ── GENERAR TODO ──────────────────────────────────────────────────────────────
