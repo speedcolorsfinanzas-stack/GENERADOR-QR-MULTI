@@ -253,23 +253,41 @@ tr:hover td { background:#f8f9ff; }
     <p style="font-size:13px;color:#546e7a;margin-bottom:14px">Indicá qué columna corresponde a cada campo.</p>
     <div class="col-map-grid" id="col-map-grid"></div>
 
-    <!-- URL BASE -->
-    <div style="background:#f8f9ff;border:1.5px solid #e8eaf6;border-radius:10px;padding:14px;margin-bottom:18px">
-      <p style="font-size:12px;font-weight:700;color:#0f3460;margin-bottom:8px">
-        🌐 URL de la tarjeta virtual (QR redirigirá a esta URL)
-      </p>
-      <div style="display:flex;gap:10px;align-items:center">
-        <input id="base-url" type="text" style="flex:1;padding:8px 12px;border:1.5px solid #dde1e7;border-radius:8px;font-size:13px;outline:none"
-          placeholder="Ej: https://tudominio.com  o  http://localhost:3000">
-        <button class="btn btn-outline btn-sm" onclick="autoDetectarURL()">Auto-detectar</button>
+    <!-- CLIENTE / MARCA -->
+    <div style="background:#f8f9ff;border:1.5px solid #e8eaf6;border-radius:10px;padding:16px;margin-bottom:14px">
+      <p style="font-size:12px;font-weight:700;color:#0f3460;margin-bottom:12px">🏢 Cliente y Marca</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+        <div>
+          <label style="display:block;font-size:11px;font-weight:600;color:#546e7a;margin-bottom:5px">Cliente</label>
+          <select id="sel-cliente" onchange="onClienteChange()" style="width:100%;padding:8px 10px;border:1.5px solid #dde1e7;border-radius:8px;font-size:13px;outline:none">
+            <option value="etreus">ETREUS</option>
+            <option value="">— Otro (URL manual) —</option>
+          </select>
+        </div>
+        <div>
+          <label style="display:block;font-size:11px;font-weight:600;color:#546e7a;margin-bottom:5px">Marca <span style="color:#90a4ae;font-weight:400">(opcional)</span></label>
+          <select id="sel-marca" onchange="actualizarPreviewURL()" style="width:100%;padding:8px 10px;border:1.5px solid #dde1e7;border-radius:8px;font-size:13px;outline:none">
+            <option value="">— Sin marca (usar carpeta base del cliente) —</option>
+          </select>
+        </div>
       </div>
-      <p style="font-size:11px;color:#90a4ae;margin-top:6px">
-        Al escanear el QR se abrirá: <span id="url-preview" style="color:#0f3460;font-weight:600">{URL}/qr-view.html?activo=EDF_1&amp;rg=...</span>
+      <p style="font-size:11px;color:#90a4ae;margin-bottom:10px">
+        URL generada: <span id="url-preview" style="color:#0f3460;font-weight:600"></span>
       </p>
-      <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;cursor:pointer">
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
         <input type="checkbox" id="chk-url" checked> Codificar URL (tarjeta virtual al escanear)
         <span style="font-size:11px;color:#90a4ae">/ Desmarcar para codificar solo texto</span>
       </label>
+    </div>
+
+    <!-- URL BASE (avanzado) -->
+    <div id="url-manual" style="display:none;background:#fff8e1;border:1.5px solid #ffe082;border-radius:10px;padding:12px;margin-bottom:14px">
+      <p style="font-size:12px;font-weight:700;color:#e65100;margin-bottom:8px">⚙️ URL base manual</p>
+      <div style="display:flex;gap:10px;align-items:center">
+        <input id="base-url" type="text" style="flex:1;padding:8px 12px;border:1.5px solid #dde1e7;border-radius:8px;font-size:13px;outline:none"
+          placeholder="https://speedcolorsfinanzas-stack.github.io/GENERADOR-QR-MULTI">
+        <button class="btn btn-outline btn-sm" onclick="autoDetectarURL()">Auto</button>
+      </div>
     </div>
 
     <div style="display:flex;gap:10px">
@@ -443,32 +461,63 @@ function buildTexto(row, map) {
 }
 
 function buildURL(row, map) {
-  const base = (document.getElementById('base-url').value.trim() || GITHUB_PAGES_URL)
-    .replace(/\/$/, '');
+  const viewerURL = getViewerURL();
   const params = new URLSearchParams();
   CAMPOS.forEach(f => {
     const col = map[f.key];
     const val = col ? String(row[col] || '').trim() : '';
     if (val) params.set(URL_PARAMS[f.key] || f.key, val);
   });
-  return `${base}/qr-view.html?${params.toString()}`;
+  return `${viewerURL}?${params.toString()}`;
 }
 
-// URL fija de GitHub Pages — esta nunca cambia aunque muevas el hosting
 const GITHUB_PAGES_URL = 'https://speedcolorsfinanzas-stack.github.io/GENERADOR-QR-MULTI';
 
+// Registro de clientes y sus marcas
+const CLIENTES = {
+  etreus: { label:'ETREUS', marcas:[] }, // marcas vacías por ahora — se agregarán cuando se definan
+};
+
+function onClienteChange() {
+  const cliente = document.getElementById('sel-cliente').value;
+  const selMarca = document.getElementById('sel-marca');
+  const urlManual = document.getElementById('url-manual');
+
+  if (!cliente) {
+    urlManual.style.display = 'block';
+    selMarca.innerHTML = '<option value="">— N/A —</option>';
+  } else {
+    urlManual.style.display = 'none';
+    const marcas = CLIENTES[cliente]?.marcas || [];
+    selMarca.innerHTML = '<option value="">— Sin marca (carpeta base del cliente) —</option>'
+      + marcas.map(m => `<option value="${m.value}">${m.label}</option>`).join('');
+  }
+  actualizarPreviewURL();
+}
+
+function getViewerURL() {
+  const cliente = document.getElementById('sel-cliente').value;
+  const marca   = document.getElementById('sel-marca').value;
+  if (!cliente) {
+    const manual = (document.getElementById('base-url')?.value.trim() || GITHUB_PAGES_URL).replace(/\/$/,'');
+    return `${manual}/qr-view.html`;
+  }
+  const path = marca
+    ? `clientes/${cliente}/${marca}/qr-view.html`
+    : `clientes/${cliente}/qr-view.html`;
+  return `${GITHUB_PAGES_URL}/${path}`;
+}
+
 function autoDetectarURL() {
-  const esLocal = ['localhost','127.0.0.1'].includes(window.location.hostname);
-  // En local usa el servidor actual; en producción siempre usa GitHub Pages
-  const base = esLocal ? window.location.origin : GITHUB_PAGES_URL;
-  document.getElementById('base-url').value = base;
+  document.getElementById('base-url').value = GITHUB_PAGES_URL;
   actualizarPreviewURL();
 }
 
 function actualizarPreviewURL() {
-  const base = (document.getElementById('base-url').value.trim() || GITHUB_PAGES_URL).replace(/\/$/,'');
-  document.getElementById('url-preview').textContent = `${base}/qr-view.html?activo=EDF_1&rg=...`;
+  const url = getViewerURL();
+  document.getElementById('url-preview').textContent = `${url}?a=EDF_1&rg=...`;
 }
+document.addEventListener('DOMContentLoaded', () => { onClienteChange(); });
 document.addEventListener('DOMContentLoaded', autoDetectarURL);
 
 // ── GENERAR TODO ──────────────────────────────────────────────────────────────
