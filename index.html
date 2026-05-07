@@ -263,24 +263,29 @@ tr:hover td { background:#f8f9ff; }
       <!-- Panel gestión -->
       <div id="panel-gestion" style="display:none;background:white;border:1.5px solid #dde1e7;border-radius:10px;padding:14px;margin-bottom:14px">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-          <!-- Agregar cliente -->
+
+          <!-- Columna izquierda: clientes -->
           <div>
-            <p style="font-size:11px;font-weight:700;color:#546e7a;margin-bottom:8px">➕ Nuevo cliente</p>
-            <div style="display:flex;gap:6px">
-              <input id="inp-cliente" type="text" placeholder="Ej: ACME Corp" style="flex:1;padding:7px 10px;border:1.5px solid #dde1e7;border-radius:7px;font-size:13px;outline:none">
-              <button class="btn btn-primary btn-sm" onclick="agregarCliente()">Agregar</button>
+            <p style="font-size:11px;font-weight:700;color:#546e7a;margin-bottom:8px">CLIENTES</p>
+            <div style="display:flex;gap:6px;margin-bottom:8px">
+              <input id="inp-cliente" type="text" placeholder="Nombre del cliente" style="flex:1;padding:7px 10px;border:1.5px solid #dde1e7;border-radius:7px;font-size:13px;outline:none">
+              <button class="btn btn-primary btn-sm" onclick="agregarCliente()">+ Agregar</button>
             </div>
-            <div id="lista-clientes" style="margin-top:10px;display:flex;flex-direction:column;gap:5px"></div>
+            <div id="lista-clientes" style="display:flex;flex-direction:column;gap:4px;max-height:180px;overflow-y:auto"></div>
           </div>
-          <!-- Agregar marca -->
+
+          <!-- Columna derecha: marcas del cliente seleccionado en panel -->
           <div>
-            <p style="font-size:11px;font-weight:700;color:#546e7a;margin-bottom:8px">➕ Nueva marca (para cliente seleccionado)</p>
-            <div style="display:flex;gap:6px">
-              <input id="inp-marca" type="text" placeholder="Ej: MetalFrio" style="flex:1;padding:7px 10px;border:1.5px solid #dde1e7;border-radius:7px;font-size:13px;outline:none">
-              <button class="btn btn-primary btn-sm" onclick="agregarMarca()">Agregar</button>
+            <p style="font-size:11px;font-weight:700;color:#546e7a;margin-bottom:8px">
+              MARCAS DE: <span id="lbl-cliente-activo" style="color:#0f3460">—</span>
+            </p>
+            <div style="display:flex;gap:6px;margin-bottom:8px">
+              <input id="inp-marca" type="text" placeholder="Nombre de la marca" style="flex:1;padding:7px 10px;border:1.5px solid #dde1e7;border-radius:7px;font-size:13px;outline:none">
+              <button class="btn btn-primary btn-sm" onclick="agregarMarca()">+ Agregar</button>
             </div>
-            <div id="lista-marcas" style="margin-top:10px;display:flex;flex-direction:column;gap:5px"></div>
+            <div id="lista-marcas" style="display:flex;flex-direction:column;gap:4px;max-height:180px;overflow-y:auto"></div>
           </div>
+
         </div>
       </div>
 
@@ -377,6 +382,7 @@ let datos   = [];
 let headers = [];
 let vistaActual = 'qr';
 let generados   = [];  // [{idx, activo, marca, modelo, regional, cliente, camposExtra, qrUrl, texto}]
+let panelClienteKey = null; // cliente seleccionado dentro del panel gestión
 
 // ── QR GENERATOR ─────────────────────────────────────────────────────────────
 function makeQRUrl(text, cellSz) {
@@ -537,15 +543,18 @@ function agregarMarca() {
   const inp = document.getElementById('inp-marca');
   const nombre = inp.value.trim();
   if (!nombre) return;
-  const clienteKey = document.getElementById('sel-cliente').value;
+  // Prioridad: cliente seleccionado en el panel; si no, el del dropdown
+  const clienteKey = panelClienteKey || document.getElementById('sel-cliente').value;
   if (!clienteKey) { alert('Seleccioná un cliente primero.'); return; }
   const clientes = cargarClientes();
   const key = slug(nombre);
+  if (!clientes[clienteKey]) { alert('Cliente no encontrado.'); return; }
   if (!clientes[clienteKey].marcas.find(m => m.value === key)) {
     clientes[clienteKey].marcas.push({ value: key, label: nombre.toUpperCase() });
   }
   guardarClientes(clientes);
   inp.value = '';
+  seleccionarClienteEnPanel(clienteKey);
   onClienteChange();
 }
 
@@ -553,6 +562,7 @@ function eliminarMarca(clienteKey, marcaKey) {
   const clientes = cargarClientes();
   clientes[clienteKey].marcas = clientes[clienteKey].marcas.filter(m => m.value !== marcaKey);
   guardarClientes(clientes);
+  seleccionarClienteEnPanel(clienteKey);
   onClienteChange();
 }
 
@@ -564,19 +574,66 @@ function renderSelectores() {
     .map(([k,v]) => `<option value="${k}">${v.label}</option>`).join('');
   if (prev && clientes[prev]) selCliente.value = prev;
 
-  // Renderizar lista en panel gestión
+  // Renderizar lista en panel gestión con click-to-select
   const listaC = document.getElementById('lista-clientes');
   if (listaC) {
-    listaC.innerHTML = Object.entries(clientes).map(([k,v]) => `
-      <div style="display:flex;justify-content:space-between;align-items:center;background:#f0f2f5;padding:5px 10px;border-radius:6px;font-size:12px">
+    listaC.innerHTML = Object.entries(clientes).map(([k,v]) => {
+      const isSelected = k === panelClienteKey;
+      return `
+      <div onclick="seleccionarClienteEnPanel('${k}')"
+           style="display:flex;justify-content:space-between;align-items:center;
+                  background:${isSelected ? '#0f3460' : '#f0f2f5'};
+                  color:${isSelected ? 'white' : 'inherit'};
+                  padding:5px 10px;border-radius:6px;font-size:12px;cursor:pointer;transition:all 0.15s">
         <span style="font-weight:600">${v.label}</span>
-        <button onclick="eliminarCliente('${k}')" style="border:none;background:none;color:#e53935;cursor:pointer;font-size:13px">✕</button>
-      </div>`).join('');
+        <button onclick="event.stopPropagation();eliminarCliente('${k}')"
+                style="border:none;background:none;color:${isSelected ? 'rgba(255,255,255,0.7)' : '#e53935'};cursor:pointer;font-size:13px">✕</button>
+      </div>`;
+    }).join('');
+  }
+
+  // Si hay un cliente seleccionado en el panel, refrescar sus marcas
+  if (panelClienteKey && clientes[panelClienteKey]) {
+    seleccionarClienteEnPanel(panelClienteKey);
+  }
+}
+
+function seleccionarClienteEnPanel(key) {
+  panelClienteKey = key;
+  const clientes = cargarClientes();
+  const cliente = clientes[key];
+
+  // Actualizar etiqueta
+  const lbl = document.getElementById('lbl-cliente-activo');
+  if (lbl) lbl.textContent = cliente ? cliente.label : '—';
+
+  // Actualizar lista de marcas del panel
+  const listaM = document.getElementById('lista-marcas');
+  if (listaM && cliente) {
+    listaM.innerHTML = cliente.marcas.length
+      ? cliente.marcas.map(m => `
+          <div style="display:flex;justify-content:space-between;align-items:center;background:#f0f2f5;padding:5px 10px;border-radius:6px;font-size:12px">
+            <span style="font-weight:600">${m.label}</span>
+            <button onclick="eliminarMarca('${key}','${m.value}')" style="border:none;background:none;color:#e53935;cursor:pointer;font-size:13px">✕</button>
+          </div>`).join('')
+      : '<p style="font-size:11px;color:#90a4ae">Sin marcas. Agregá una arriba.</p>';
+  }
+
+  // Resaltar el item seleccionado en la lista de clientes (re-render solo los estilos)
+  const listaC = document.getElementById('lista-clientes');
+  if (listaC) {
+    Array.from(listaC.children).forEach(el => {
+      const isActive = el.getAttribute('onclick')?.includes(`'${key}'`);
+      el.style.background = isActive ? '#0f3460' : '#f0f2f5';
+      el.style.color       = isActive ? 'white'   : 'inherit';
+      const btn = el.querySelector('button');
+      if (btn) btn.style.color = isActive ? 'rgba(255,255,255,0.7)' : '#e53935';
+    });
   }
 }
 
 function onClienteChange() {
-  const clientes  = cargarClientes();
+  const clientes   = cargarClientes();
   const clienteKey = document.getElementById('sel-cliente').value;
   const selMarca   = document.getElementById('sel-marca');
   const marcas = clientes[clienteKey]?.marcas || [];
@@ -584,17 +641,6 @@ function onClienteChange() {
   selMarca.innerHTML = '<option value="">— Sin marca —</option>'
     + marcas.map(m => `<option value="${m.value}">${m.label}</option>`).join('');
 
-  // Actualizar lista de marcas en panel gestión
-  const listaM = document.getElementById('lista-marcas');
-  if (listaM) {
-    listaM.innerHTML = marcas.length
-      ? marcas.map(m => `
-          <div style="display:flex;justify-content:space-between;align-items:center;background:#f0f2f5;padding:5px 10px;border-radius:6px;font-size:12px">
-            <span style="font-weight:600">${m.label}</span>
-            <button onclick="eliminarMarca('${clienteKey}','${m.value}')" style="border:none;background:none;color:#e53935;cursor:pointer;font-size:13px">✕</button>
-          </div>`).join('')
-      : '<p style="font-size:11px;color:#90a4ae">Sin marcas agregadas</p>';
-  }
   actualizarPreviewURL();
 }
 
@@ -602,6 +648,12 @@ function toggleGestion() {
   const p = document.getElementById('panel-gestion');
   p.style.display = p.style.display === 'none' ? 'block' : 'none';
   if (p.style.display === 'block') {
+    // Si no hay cliente seleccionado en el panel, preseleccionar el primero
+    if (!panelClienteKey) {
+      const clientes = cargarClientes();
+      const firstKey = Object.keys(clientes)[0];
+      if (firstKey) panelClienteKey = firstKey;
+    }
     renderSelectores();
     onClienteChange();
   }
