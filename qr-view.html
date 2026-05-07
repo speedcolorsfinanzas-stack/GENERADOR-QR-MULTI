@@ -197,7 +197,8 @@ function render(d) {
 
   document.title = (d.activo || 'Equipo') + ' — EDF';
 
-  const mainFields = ['rg','modelo','anio','ploteo']
+  // Orden: RG → Modelo → Año → Marca → Ploteo
+  const mainFields = ['rg','modelo','anio','marca','ploteo']
     .filter(k => d[k])
     .map(k => `
       <div class="field-row">
@@ -209,7 +210,6 @@ function render(d) {
     <div class="card-header">
       <div class="badge-edf">EQUIPO EDF</div>
       <div class="card-activo">${d.activo || '—'}</div>
-      ${d.marca ? `<div class="card-marca">${d.marca}</div>` : ''}
     </div>
     <div class="card-body">
       ${mainFields}
