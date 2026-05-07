@@ -214,11 +214,6 @@ function render(d) {
     <div class="card-body">
       ${mainFields}
     </div>
-    ${(d.regional || d.cliente) ? `
-    <div class="card-footer">
-      ${d.regional ? `<div class="footer-row"><span>Regional</span><span class="val">${d.regional}</span></div>` : ''}
-      ${d.cliente  ? `<div class="footer-row"><span>Código Cliente</span><span class="val">${d.cliente}</span></div>` : ''}
-    </div>` : ''}
     <div class="actions">
       <button class="btn-action btn-share" id="btn-share" onclick="compartir()">
         📤 Compartir
