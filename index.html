@@ -661,12 +661,10 @@ function toggleGestion() {
 
 function getViewerURL() {
   const cliente = document.getElementById('sel-cliente').value;
-  const marca   = document.getElementById('sel-marca').value;
+  // La marca viaja como parámetro URL (?m=...), no como subcarpeta.
+  // Así una sola qr-view.html por cliente sirve para todas sus marcas.
   if (!cliente) return `${GITHUB_PAGES_URL}/qr-view.html`;
-  const path = marca
-    ? `clientes/${cliente}/${marca}/qr-view.html`
-    : `clientes/${cliente}/qr-view.html`;
-  return `${GITHUB_PAGES_URL}/${path}`;
+  return `${GITHUB_PAGES_URL}/clientes/${cliente}/qr-view.html`;
 }
 
 function autoDetectarURL() { actualizarPreviewURL(); }
