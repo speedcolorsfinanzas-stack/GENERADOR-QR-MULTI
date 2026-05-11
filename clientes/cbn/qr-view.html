@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="theme-color" content="#0f3460">
+<title>Equipo EDF</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  background: #f0f2f5;
+  min-height: 100vh;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 0 0 32px;
+}
+
+.card {
+  width: 100%;
+  max-width: 480px;
+  background: white;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+  overflow: hidden;
+}
+
+/* HEADER */
+.card-header {
+  background: linear-gradient(135deg, #1a1a2e 0%, #0f3460 100%);
+  padding: 20px 20px 16px;
+  color: white;
+  position: relative;
+}
+.card-activo {
+  font-size: 32px; font-weight: 800;
+  letter-spacing: -0.5px;
+  line-height: 1.1;
+}
+
+/* BODY */
+.card-body { padding: 20px; }
+
+.field-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 11px 0;
+  border-bottom: 1px solid #f0f2f5;
+  gap: 12px;
+}
+.field-row:last-of-type { border-bottom: none; }
+.field-label {
+  font-size: 12px;
+  color: #90a4ae;
+  font-weight: 600;
+  min-width: 120px;
+  flex-shrink: 0;
+}
+.field-value {
+  font-size: 14px;
+  color: #1a1a2e;
+  font-weight: 600;
+  text-align: right;
+  word-break: break-all;
+}
+
+/* ACTIONS */
+.actions {
+  display: flex;
+  gap: 10px;
+  padding: 14px 20px;
+  background: white;
+  border-top: 1px solid #f0f2f5;
+}
+.btn-action {
+  flex: 1;
+  padding: 12px;
+  border-radius: 10px;
+  border: none;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.btn-share {
+  background: #0f3460; color: white;
+}
+.btn-share:hover { background: #1a4a7a; }
+.btn-print {
+  background: #f0f2f5; color: #546e7a;
+}
+.btn-print:hover { background: #e0e0e0; }
+
+/* NOT FOUND */
+.not-found {
+  text-align: center;
+  padding: 60px 20px;
+  color: #90a4ae;
+}
+.not-found .ico { font-size: 56px; margin-bottom: 16px; }
+.not-found h2 { font-size: 18px; color: #546e7a; margin-bottom: 8px; }
+
+@media print {
+  .actions { display: none; }
+  body { background: white; }
+  .card { box-shadow: none; max-width: 100%; }
+}
+</style>
+</head>
+<body>
+
+<div class="card" id="card">
+  <div class="not-found" id="not-found" style="display:none">
+    <div class="ico">❌</div>
+    <h2>Sin datos</h2>
+    <p>Este QR no contiene información de equipo.</p>
+  </div>
+</div>
+
+<script>
+const LABELS = {
+  activo:   'Activo',
+  marca:    'Marca del EDF',
+  rg:       'RG del Equipo',
+  modelo:   'Modelo del equipo',
+  anio:     'Año de Fabricación',
+  ploteo:   'Ploteo del EDF',
+  regional: 'Regional',
+  cliente:  'Código Cliente',
+};
+
+const PARAM_MAP = {
+  a:'activo', m:'marca', rg:'rg', mod:'modelo',
+  yr:'anio', plt:'ploteo', reg:'regional', cli:'cliente',
+};
+
+function getParams() {
+  const p = new URLSearchParams(window.location.search);
+  const d = {};
+  for (const [k, v] of p.entries()) {
+    const field = PARAM_MAP[k] || k;
+    if (v) d[field] = v;
+  }
+  return d;
+}
+
+function render(d) {
+  const card = document.getElementById('card');
+  if (!d.activo && !d.rg) {
+    document.getElementById('not-found').style.display = 'block';
+    return;
+  }
+
+  document.title = (d.activo || 'Equipo') + ' — CBN';
+
+  const mainFields = ['rg','modelo','anio','marca','ploteo']
+    .filter(k => d[k])
+    .map(k => `
+      <div class="field-row">
+        <span class="field-label">${LABELS[k]}</span>
+        <span class="field-value">${d[k]}</span>
+      </div>`).join('');
+
+  card.innerHTML = `
+    <div class="card-header">
+      <div class="card-activo">${d.activo || '—'}</div>
+    </div>
+    <div class="card-body">
+      ${mainFields}
+    </div>
+    <div class="actions">
+      <button class="btn-action btn-share" id="btn-share" onclick="compartir()">
+        📤 Compartir
+      </button>
+      <button class="btn-action btn-print" onclick="window.print()">
+        🖨️ Imprimir
+      </button>
+    </div>`;
+
+  if (!navigator.share) {
+    document.getElementById('btn-share').style.display = 'none';
+  }
+}
+
+async function compartir() {
+  try {
+    await navigator.share({
+      title: 'Equipo EDF — ' + (getParams().activo || ''),
+      url: window.location.href,
+    });
+  } catch(e) {
+    navigator.clipboard && navigator.clipboard.writeText(window.location.href)
+      .then(() => alert('URL copiada al portapapeles'));
+  }
+}
+
+render(getParams());
+</script>
+</body>
+</html>
