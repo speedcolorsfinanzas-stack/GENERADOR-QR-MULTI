@@ -287,6 +287,9 @@ tr:hover td { background:#f8f9ff; }
           </div>
 
         </div>
+        <div style="margin-top:10px;text-align:right">
+          <button onclick="resetearClientes()" style="border:none;background:none;color:#e53935;font-size:11px;font-weight:600;cursor:pointer;text-decoration:underline">🗑 Restablecer todos los clientes</button>
+        </div>
       </div>
 
       <!-- Selectores -->
@@ -505,8 +508,17 @@ function cargarClientes() {
     const raw = localStorage.getItem(LS_KEY);
     if (raw) return JSON.parse(raw);
   } catch(e) {}
-  // Datos por defecto
-  return { etreus: { label:'ETREUS', marcas:[] } };
+  return {};
+}
+
+function resetearClientes() {
+  if (!confirm('¿Eliminar TODOS los clientes y marcas registrados? Esta acción no se puede deshacer.')) return;
+  localStorage.removeItem(LS_KEY);
+  panelClienteKey = null;
+  renderSelectores();
+  onClienteChange();
+  document.getElementById('lbl-cliente-activo').textContent = '—';
+  document.getElementById('lista-marcas').innerHTML = '';
 }
 
 function guardarClientes(obj) {
